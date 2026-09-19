@@ -132,12 +132,12 @@
   }
 
   function drawFrame(frame, opacity = 1) {
-    // Cover the viewport without stretching the original 16:9 images.
+    // Keep the top of the portrait visible inside the lowered backdrop.
     const scale = Math.max(canvas.width / frame.width, canvas.height / frame.height);
     const width = frame.width * scale;
     const height = frame.height * scale;
     context.globalAlpha = opacity;
-    context.drawImage(frame, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+    context.drawImage(frame, (canvas.width - width) / 2, 0, width, height);
   }
 
   function paint() {
