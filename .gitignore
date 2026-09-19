@@ -1,0 +1,15 @@
+.preview/
+debug.log
+
+# Local dependencies and configuration
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
