@@ -4,14 +4,17 @@
   const FRAME_COUNT = 196;
   const CACHE_LIMIT = 32;
   const DECODE_WORKERS = 3;
+  const MAX_RENDER_PIXELS = 3840 * 2160;
   const canvas = document.getElementById("sequence");
   const hero = document.getElementById("home");
   if (!canvas || !hero) return;
   const heroStage = hero.querySelector(".hero-stage");
   const intro = hero.querySelector(".hero-intro");
   const outro = hero.querySelector(".hero-outro");
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext("2d", { alpha: false });
   if (!context) return;
+  // The CSS poster stays visible until the first opaque frame is ready.
+  canvas.style.opacity = "0";
 
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   // Keep compressed files in memory, but only decode frames near the playhead.
@@ -32,6 +35,7 @@
   let lastTime = 0;
   let lastPlan = "";
   let lastPaint = "";
+  let hasPainted = false;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const frameUrl = (index) => `./Pics/ezgif-frame-${String(index + 1).padStart(3, "0")}.jpg`;
@@ -138,6 +142,10 @@
     const height = frame.height * scale;
     context.globalAlpha = opacity;
     context.drawImage(frame, (canvas.width - width) / 2, 0, width, height);
+    if (!hasPainted) {
+      canvas.style.opacity = "1";
+      hasPainted = true;
+    }
   }
 
   function paint() {
@@ -203,7 +211,9 @@
 
   function readScroll() {
     // The portrait advances across the whole page, reaching its last frame at the footer.
-    target = clamp(window.scrollY / scrollRange, 0, 1) * (FRAME_COUNT - 1);
+    // Ease between frames while moving, then settle on one sharp source frame.
+    // A fractional resting target would permanently blend two different poses.
+    target = Math.round(clamp(window.scrollY / scrollRange, 0, 1) * (FRAME_COUNT - 1));
     // Copy transitions retain their own timing inside the sticky introduction.
     heroTarget = clamp((window.scrollY - heroScrollStart) / heroScrollRange, 0, 1);
     wake();
@@ -213,8 +223,9 @@
     const bounds = canvas.getBoundingClientRect();
     const width = Math.max(1, bounds.width);
     const height = Math.max(1, bounds.height);
-    // The source is 1080p; larger backing buffers only increase GPU work.
-    const ratio = Math.min(devicePixelRatio || 1, 2, 1920 / width, 1080 / height);
+    // Render directly at display density instead of letting CSS stretch a 1080p
+    // canvas. Limit the surface to 4K worth of pixels to bound rendering cost.
+    const ratio = Math.min(devicePixelRatio || 1, 2, Math.sqrt(MAX_RENDER_PIXELS / (width * height)));
     const backingWidth = Math.max(1, Math.round(width * ratio));
     const backingHeight = Math.max(1, Math.round(height * ratio));
     // Content expansion changes the timeline without clearing the visible canvas.
@@ -230,6 +241,8 @@
     const stageHeight = heroStage ? heroStage.getBoundingClientRect().height : innerHeight;
     heroScrollRange = Math.max(1, hero.offsetHeight - stageHeight);
     readScroll();
+    // Repaint cached content immediately after resizing, without a black frame.
+    if (frames.size) paint();
   }
 
   async function preload() {
